@@ -32,6 +32,10 @@ class Vector {
     return this.x * newVector.x + this.y * newVector.y + this.z * newVector.z;
   }
 
+  negative() {
+    return this.mulScalar(-1);
+  }
+
   getColor(name) {
     let floatVal = this[name];
     return Math.round(255 * Math.max(0, Math.min(1, floatVal)))

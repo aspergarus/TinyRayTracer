@@ -1,10 +1,10 @@
 class Sphere {
 
   // Center is Vector
-  constructor(center, radius, color) {
+  constructor(center, radius, material) {
     this.center = center;
     this.radius = radius;
-    this.color = color;
+    this.material = material;
   }
 
   

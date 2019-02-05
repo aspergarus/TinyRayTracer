@@ -25,22 +25,7 @@ function setImageForCanvas() {
 }
 
 function render(width, height) {
-  const ivory = new Vector(0.4, 0.4, 0.3);
-  const redRubber = new Vector(0.7, 0.4, 0.1);
-  const fov = Math.PI / 2;
-  
-  let spheres = [
-    new Sphere(new Vector(-3.0, 0, -16.0), 2, ivory),
-    new Sphere(new Vector(-1.0, -1.50, -12.0), 2, redRubber),
-    new Sphere(new Vector(1.5, -0.5, -18.0), 3, redRubber),
-    new Sphere(new Vector(7.0, 5.0, -18.0), 4, ivory),
-  ];
-  
-  let lights = [
-    new Light(new Vector(-20, 20,  20), 1.4),
-    // new Light(new Vector(30, 50,  -25), 1.3),
-    // new Light(new Vector(30, 20,  30), 1.05),
-  ];
+  let [fov, spheres, lights] = initScene();
   
   let result = [];
 
@@ -51,17 +36,40 @@ function render(width, height) {
 
       let dir = new Vector(x, y, -1).normalize();
 
-      let floatColor = castRay(new Vector(0,0,0), dir, spheres, lights);
-      result[i+j*width] = floatColor.getRGB();
+      let color = castRay(new Vector(0,0,0), dir, spheres, lights);
+      result[i+j*width] = color.getRGB();
     }
   }
   
   return result;
 }
 
+// orig and dir is Vector
+function castRay(orig, dir, spheres, lights) {
+  let [intersection, point, N, material] = sceneIntersect(orig, dir, spheres);
+
+  if (!intersection) {
+    return new Vector(0.2, 0.7, 0.8);
+  }
+
+  let diffuseLightIntensity = 0;
+  let specularLightIntensity = 0;
+  for (light of lights) {
+    let lightDir = (light.position.minus(point)).normalize();
+    diffuseLightIntensity += light.intensity * Math.max(0, lightDir.mul(N));
+
+    let reflection = reflect(lightDir.negative(), N);
+    specularLightIntensity += Math.pow(Math.max(0, -(reflection.mul(dir))), material.getSpecular());
+  }
+
+  let duffuseColor = material.getColor().mulScalar(diffuseLightIntensity).mulScalar(material.getAlbedo(0));
+  let specularColor = new Vector(1., 1., 1.).mulScalar(specularLightIntensity).mulScalar(material.getAlbedo(1));
+  return duffuseColor.plus(specularColor);
+}
+
 function sceneIntersect(orig, dir, spheres) {
   let sphereDist = Infinity;
-  let hit, N, color;
+  let hit, N, material;
 
   for (let sphere of spheres) {
     let [intersection, dist] = sphere.rayIntersect(orig, dir, 0);
@@ -69,27 +77,34 @@ function sceneIntersect(orig, dir, spheres) {
       sphereDist = dist;
       hit = orig.plus(dir.mulScalar(dist));
       N = hit.minus(sphere.center).normalize();
-      color = sphere.color;
+      material = sphere.material;
     }
   }
   
-  return [sphereDist < 1000, hit, N, color];
+  return [sphereDist < 1000, hit, N, material];
 }
 
-// orig and dir is Vector
-function castRay(orig, dir, spheres, lights) {
-  let [intersection, point, N, color] = sceneIntersect(orig, dir, spheres);
+function reflect(I, N) {
+  return I.minus(N.mulScalar(2).mulScalar(I.mul(N)));
+}
 
-  if (!intersection) {
-    return new Vector(0.2, 0.7, 0.8);
-  }
+function initScene() {
+  const ivory = new Material([0.6, 0.3], new Vector(0.4, 0.4, 0.3), 50);
+  const redRubber = new Material([0.9, 0.1], new Vector(0.3, 0.1, 0.1), 10);
+  const fov = Math.PI / 2;
+  
+  let spheres = [
+    new Sphere(new Vector(-3.0, 0, -16.0), 2, ivory),
+    new Sphere(new Vector(-1.0, -1.50, -12.0), 2, redRubber),
+    new Sphere(new Vector(1.5, -0.5, -18.0), 3, redRubber),
+    new Sphere(new Vector(7.0, 5.0, -18.0), 4, ivory),
+  ];
+  
+  let lights = [
+    new Light(new Vector(-20, 20,  20), 1.5),
+    new Light(new Vector(30, 50,  -25), 1.8),
+    new Light(new Vector(30, 20,  30), 1.7),
+  ];
 
-  let diffuseLightIntensity = 0;
-  for (light of lights) {
-    let lightDir = (light.position.minus(point)).normalize();
-    diffuseLightIntensity += light.intensity * Math.max(0, lightDir.mul(N));
-  }
-
-  return color.mulScalar(diffuseLightIntensity);
-  return color;
+  return [fov, spheres, lights];
 }
