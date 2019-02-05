@@ -1,5 +1,5 @@
 class Material {
-  // albedo - 2d-array
+  // albedo - Vector
   // color - Vector
   // specularExponent - float
   constructor(albedo, color, specularExponent) {

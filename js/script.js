@@ -45,12 +45,18 @@ function render(width, height) {
 }
 
 // orig and dir is Vector
-function castRay(orig, dir, spheres, lights) {
+function castRay(orig, dir, spheres, lights, depth) {
   let [intersection, point, N, material] = sceneIntersect(orig, dir, spheres);
 
-  if (!intersection) {
+  if (depth > 1 || !intersection) {
     return new Vector(0.2, 0.7, 0.8);
   }
+
+  let tinyN = N.mulScalar(0.001);
+
+  let reflectDir = reflect(dir, N).normalize();
+  let reflectOrig = reflectDir.mul(N) < 0 ? point.minus(tinyN) : point.plus(tinyN); // offset the original point to avoid occlusion by the object itself
+  let reflectColor = castRay(reflectOrig, reflectDir, spheres, lights, depth + 1);
 
   let diffuseLightIntensity = 0;
   let specularLightIntensity = 0;
@@ -58,7 +64,6 @@ function castRay(orig, dir, spheres, lights) {
     let lightDir = (light.position.minus(point)).normalize();
     let lightDistance = (light.position.minus(point)).norm();
 
-    let tinyN = N.mulScalar(0.001);
     let shadowOrig = lightDir.mul(N) < 0 ? point.minus(tinyN) : point.plus(tinyN); // checking if the point lies in the shadow of the light
 
     let [shadowIntersection, shadowPoint, shadowN, tmpmaterial] = sceneIntersect(shadowOrig, lightDir, spheres);
@@ -74,7 +79,8 @@ function castRay(orig, dir, spheres, lights) {
 
   let duffuseColor = material.getColor().mulScalar(diffuseLightIntensity).mulScalar(material.getAlbedo(0));
   let specularColor = new Vector(1., 1., 1.).mulScalar(specularLightIntensity).mulScalar(material.getAlbedo(1));
-  return duffuseColor.plus(specularColor);
+  let finalReflectColor = reflectColor.mulScalar(material.getAlbedo(2));
+  return duffuseColor.plus(specularColor).plus(finalReflectColor);
 }
 
 function sceneIntersect(orig, dir, spheres) {
@@ -99,15 +105,16 @@ function reflect(I, N) {
 }
 
 function initScene() {
-  const ivory = new Material([0.6, 0.3], new Vector(0.4, 0.4, 0.3), 50);
-  const redRubber = new Material([0.9, 0.1], new Vector(0.3, 0.1, 0.1), 10);
+  const ivory = new Material([0.6, 0.3, 0.1], new Vector(0.4, 0.4, 0.3), 50.);
+  const redRubber = new Material([0.9, 0.1, 0.0], new Vector(0.3, 0.1, 0.1), 10.);
+  const mirror = new Material([0., 10., 0.8], new Vector(1., 1., 1.), 1425.);
   const fov = Math.PI / 2;
   
   let spheres = [
     new Sphere(new Vector(-3.0, 0, -16.0), 2, ivory),
-    new Sphere(new Vector(-1.0, -1.50, -12.0), 2, redRubber),
+    new Sphere(new Vector(-1.0, -1.50, -12.0), 2, mirror),
     new Sphere(new Vector(1.5, -0.5, -18.0), 3, redRubber),
-    new Sphere(new Vector(7.0, 5.0, -18.0), 4, ivory),
+    new Sphere(new Vector(7.0, 5.0, -18.0), 4, mirror),
   ];
   
   let lights = [
