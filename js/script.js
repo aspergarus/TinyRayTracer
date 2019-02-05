@@ -56,6 +56,16 @@ function castRay(orig, dir, spheres, lights) {
   let specularLightIntensity = 0;
   for (light of lights) {
     let lightDir = (light.position.minus(point)).normalize();
+    let lightDistance = (light.position.minus(point)).norm();
+
+    let tinyN = N.mulScalar(0.001);
+    let shadowOrig = lightDir.mul(N) < 0 ? point.minus(tinyN) : point.plus(tinyN); // checking if the point lies in the shadow of the light
+
+    let [shadowIntersection, shadowPoint, shadowN, tmpmaterial] = sceneIntersect(shadowOrig, lightDir, spheres);
+    if (shadowIntersection && (shadowPoint.minus(shadowOrig)).norm() < lightDistance) {
+      continue;
+    }
+
     diffuseLightIntensity += light.intensity * Math.max(0, lightDir.mul(N));
 
     let reflection = reflect(lightDir.negative(), N);
