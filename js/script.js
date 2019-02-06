@@ -36,7 +36,7 @@ function render(width, height) {
 
       let dir = new Vector(x, y, -1).normalize();
 
-      let color = castRay(new Vector(0,0,0), dir, spheres, lights);
+      let color = castRay(new Vector(0,0,0), dir, spheres, lights, 0);
       result[i+j*width] = color.getRGB();
     }
   }
@@ -48,39 +48,29 @@ function render(width, height) {
 function castRay(orig, dir, spheres, lights, depth) {
   let [intersection, point, N, material] = sceneIntersect(orig, dir, spheres);
 
-  if (depth > 1 || !intersection) {
+  if (depth > 4 || !intersection) {
     return new Vector(0.2, 0.7, 0.8);
   }
 
-  let tinyN = N.mulScalar(0.001);
-
   let reflectDir = reflect(dir, N).normalize();
-  let reflectOrig = reflectDir.mul(N) < 0 ? point.minus(tinyN) : point.plus(tinyN); // offset the original point to avoid occlusion by the object itself
+  let refractDir = refract(dir, N, material.getRefract()).normalize();
+
+  let reflectOrig = vectorShift(reflectDir, N, point); // offset the original point to avoid occlusion by the object itself
+  let refractOrig = vectorShift(refractDir, N, point);
+
   let reflectColor = castRay(reflectOrig, reflectDir, spheres, lights, depth + 1);
+  let refractColor = castRay(refractOrig, refractDir, spheres, lights, depth + 1);  
 
-  let diffuseLightIntensity = 0;
-  let specularLightIntensity = 0;
-  for (light of lights) {
-    let lightDir = (light.position.minus(point)).normalize();
-    let lightDistance = (light.position.minus(point)).norm();
-
-    let shadowOrig = lightDir.mul(N) < 0 ? point.minus(tinyN) : point.plus(tinyN); // checking if the point lies in the shadow of the light
-
-    let [shadowIntersection, shadowPoint, shadowN, tmpmaterial] = sceneIntersect(shadowOrig, lightDir, spheres);
-    if (shadowIntersection && (shadowPoint.minus(shadowOrig)).norm() < lightDistance) {
-      continue;
-    }
-
-    diffuseLightIntensity += light.intensity * Math.max(0, lightDir.mul(N));
-
-    let reflection = reflect(lightDir.negative(), N);
-    specularLightIntensity += Math.pow(Math.max(0, -(reflection.mul(dir))), material.getSpecular());
-  }
+  let [diffuseLightIntensity, specularLightIntensity] = specular(spheres, lights, point, N, material, dir);
 
   let duffuseColor = material.getColor().mulScalar(diffuseLightIntensity).mulScalar(material.getAlbedo(0));
   let specularColor = new Vector(1., 1., 1.).mulScalar(specularLightIntensity).mulScalar(material.getAlbedo(1));
-  let finalReflectColor = reflectColor.mulScalar(material.getAlbedo(2));
-  return duffuseColor.plus(specularColor).plus(finalReflectColor);
+  reflectColor = reflectColor.mulScalar(material.getAlbedo(2));
+  refractColor = refractColor.mulScalar(material.getAlbedo(3));
+
+  return duffuseColor.plus(specularColor).plus(reflectColor).plus(refractColor);
+  // return duffuseColor.plus(specularColor).plus(reflectColor);
+  // return duffuseColor.plus(specularColor);
 }
 
 function sceneIntersect(orig, dir, spheres) {
@@ -104,24 +94,45 @@ function reflect(I, N) {
   return I.minus(N.mulScalar(2).mulScalar(I.mul(N)));
 }
 
-function initScene() {
-  const ivory = new Material([0.6, 0.3, 0.1], new Vector(0.4, 0.4, 0.3), 50.);
-  const redRubber = new Material([0.9, 0.1, 0.0], new Vector(0.3, 0.1, 0.1), 10.);
-  const mirror = new Material([0., 10., 0.8], new Vector(1., 1., 1.), 1425.);
-  const fov = Math.PI / 2;
-  
-  let spheres = [
-    new Sphere(new Vector(-3.0, 0, -16.0), 2, ivory),
-    new Sphere(new Vector(-1.0, -1.50, -12.0), 2, mirror),
-    new Sphere(new Vector(1.5, -0.5, -18.0), 3, redRubber),
-    new Sphere(new Vector(7.0, 5.0, -18.0), 4, mirror),
-  ];
-  
-  let lights = [
-    new Light(new Vector(-20, 20,  20), 1.5),
-    new Light(new Vector(30, 50,  -25), 1.8),
-    new Light(new Vector(30, 20,  30), 1.7),
-  ];
+function refract(I, N, eta_t, eta_i) {
+  eta_i = eta_i || 1;
 
-  return [fov, spheres, lights];
+  let cos_i = -1 * Math.max(-1., Math.min(1., I.mul(N)));
+  if (cos_i < 0) {
+    return refract(I, N.negative(), eta_i, eta_t);
+  }
+
+  let eta = eta_i / eta_t;
+  let k = 1 - eta * eta * (1 - cos_i * cos_i);
+
+  return k < 0 ? new Vector(1, 0, 0) : I.mulScalar(eta).plus(N.mulScalar(eta * cos_i - Math.sqrt(k)));
+}
+
+function specular(spheres, lights, point, N, material, dir) {
+  let [diffuseLightIntensity, specularLightIntensity] = [0, 0];
+
+  for (light of lights) {
+    let lightDir = (light.position.minus(point)).normalize();
+    let lightDistance = (light.position.minus(point)).norm();
+
+    let shadowOrig = vectorShift(lightDir, N, point); // checking if the point lies in the shadow of the light
+
+    let [shadowIntersection, shadowPoint, shadowN, tmpmaterial] = sceneIntersect(shadowOrig, lightDir, spheres);
+    if (shadowIntersection && (shadowPoint.minus(shadowOrig)).norm() < lightDistance) {
+      continue;
+    }
+
+    diffuseLightIntensity += light.intensity * Math.max(0, lightDir.mul(N));
+
+    let reflection = reflect(lightDir.negative(), N);
+    specularLightIntensity += Math.pow(Math.max(0, -(reflection.mul(dir))), material.getSpecular());
+  }
+
+  return [diffuseLightIntensity, specularLightIntensity];
+}
+
+function vectorShift(dirVector, N, point) {
+  let tinyN = N.mulScalar(0.001)
+
+  return dirVector.mul(N) < 0 ? point.minus(tinyN) : point.plus(tinyN);
 }

@@ -1,8 +1,10 @@
 class Material {
-  // albedo - Vector
+  // refract - float
+  // albedo - 4D-array
   // color - Vector
   // specularExponent - float
-  constructor(albedo, color, specularExponent) {
+  constructor(refract, albedo, color, specularExponent) {
+    this.refract = refract;
     this.albedo = albedo;
     this.color = color;
     this.specularExponent = specularExponent;
@@ -18,5 +20,9 @@ class Material {
 
   getAlbedo(index) {
   	return this.albedo[index];
+  }
+
+  getRefract() {
+    return this.refract;
   }
 }
