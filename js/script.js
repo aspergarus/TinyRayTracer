@@ -75,7 +75,7 @@ function castRay(orig, dir, spheres, lights, depth) {
 
 function sceneIntersect(orig, dir, spheres) {
   let sphereDist = Infinity;
-  let hit, N, material;
+  let hit, N, material = makeDefaultMaterial();
 
   for (let sphere of spheres) {
     let [intersection, dist] = sphere.rayIntersect(orig, dir, 0);
@@ -86,8 +86,36 @@ function sceneIntersect(orig, dir, spheres) {
       material = sphere.material;
     }
   }
+
+  let checkerboardDist = Infinity;
+  if (Math.abs(dir.y) > 0.001) { 
+      let d = -(orig.y + 4) / dir.y; // the checkerboard plane has equation y = -4
+      let pt = orig.plus(dir.mulScalar(d));
+
+      if (d > 0 && Math.abs(pt.x) < 15 && pt.z < -10 && pt.z > -25 && d < sphereDist) {
+          checkerboardDist = d;
+          hit = pt;
+          N = new Vector(0, 1, 0);
+          material.color = (Math.round(0.5 * hit.x + 1000) + Math.round(0.5 * hit.z)) & 1 ? new Vector(1,1,1) : new Vector(1, 0.7, 0.3);
+          material.color = material.color.mulScalar(0.3);
+      }
+  }
+
+  let checkerboardDistZ = Infinity;
+  if (Math.abs(dir.x) > 0.001) { 
+      let d = -(orig.x + 12) / dir.x; // the checkerboard plane has equation x = -12
+      let pt = orig.plus(dir.mulScalar(d));
+
+      if (d > 0 && pt.y > -4 && pt.y < 13 && pt.z < -10 && pt.z > -20 && d < sphereDist) {
+          checkerboardDistZ = d;
+          hit = pt;
+          N = new Vector(1, 0, 0);
+          material.color = (Math.round(0.5 * hit.y + 10) + Math.round(0.5 * hit.z)) & 1 ? new Vector(1,1,1) : new Vector(0.7, 1, 0.3);
+          material.color = material.color.mulScalar(0.3);
+      }
+  }
   
-  return [sphereDist < 1000, hit, N, material];
+  return [Math.min(sphereDist, checkerboardDist, checkerboardDistZ) < 1000, hit, N, material];
 }
 
 function reflect(I, N) {
@@ -135,4 +163,8 @@ function vectorShift(dirVector, N, point) {
   let tinyN = N.mulScalar(0.001)
 
   return dirVector.mul(N) < 0 ? point.minus(tinyN) : point.plus(tinyN);
+}
+
+function makeDefaultMaterial() {
+  return new Material(1, [1, 0, 0, 0], new Vector(0, 0, 0), 1);
 }
