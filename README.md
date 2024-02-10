@@ -3,4 +3,4 @@ Tiny ray tracer from the https://github.com/ssloy/tinyraytracer implemented in J
 
 ## Result in js
 
-https://mustafa1453.github.io/TinyRayTracer/
+https://aspergarus.github.io/TinyRayTracer/
